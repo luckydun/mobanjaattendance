@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mobanja Attendance System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>body { font-family: system-ui, sans-serif; }</style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
+    <h1 class="text-center mb-8">
+      <span class="block text-4xl font-extrabold text-blue-600">mobanja</span>
+      <span class="block text-2xl font-bold text-gray-700">Attendance System</span>
+    </h1>
+
+    <div class="mb-6">
+      <label class="block text-sm font-medium mb-2">Employee ID</label>
+      <input id="employeeId" type="text" class="w-full p-4 border rounded-xl text-lg" placeholder="e.g. mo001">
+    </div>
+    <div class="mb-6">
+      <label class="block text-sm font-medium mb-2">Password</label>
+      <input id="employeePassword" type="password" class="w-full p-4 border rounded-xl text-lg" placeholder="Password">
+    </div>
+
+    <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl text-xl">LOGIN</button>
+    <div id="message" class="mt-6 text-center text-lg font-medium min-h-[50px]"></div>
+  </div>
+
+  <script>
+    // Seed Admin on first run
+    if (!localStorage.getItem('users')) {
+      localStorage.setItem('users', JSON.stringify([{
+        id: 'mo001',
+        firstName: 'Super',
+        lastName: 'Admin',
+        password: 'admin123',
+        role: 'admin',
+        netSalary: 0
+      }]));
+    }
+
+    function getUsers() { return JSON.parse(localStorage.getItem('users') || '[]'); }
+    function saveUsers(users) { localStorage.setItem('users', JSON.stringify(users)); }
+
+    function showMessage(text, color) {
+      const msg = document.getElementById("message");
+      msg.innerHTML = `<span class="text-${color}-600">${text}</span>`;
+      setTimeout(() => msg.innerHTML = '', 4000);
+    }
+
+    function login() {
+      const id = document.getElementById('employeeId').value.trim();
+      const pw = document.getElementById('employeePassword').value.trim();
+      if (!id || !pw) return showMessage('Enter ID and password', 'red');
+
+      const users = getUsers();
+      const user = users.find(u => u.id === id && u.password === pw);
+      if (!user) return showMessage('Invalid ID or password', 'red');
+
+      sessionStorage.setItem('currentUser', JSON.stringify(user));
+
+      if (user.role === 'employee') {
+        window.location.href = 'attendance.html';
+      } else {
+        window.location.href = 'dashboard.html';
+      }
+    }
+  </script>
+</body>
+</html>

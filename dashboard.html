@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mobanja — Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>body { font-family: system-ui, sans-serif; }</style>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+  <div class="max-w-6xl mx-auto">
+    <div class="flex justify-between items-center mb-8">
+      <h1 class="text-4xl font-bold text-blue-600">mobanja Dashboard</h1>
+      <button onclick="logout()" class="bg-red-600 text-white px-6 py-3 rounded-xl">Logout</button>
+    </div>
+
+    <!-- Add Employee Form -->
+    <div class="bg-white p-6 rounded-2xl shadow mb-8">
+      <h2 class="text-2xl font-bold mb-4">Add New Employee</h2>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <input id="firstName" placeholder="First Name" class="p-3 border rounded-xl">
+        <input id="lastName" placeholder="Last Name" class="p-3 border rounded-xl">
+        <input id="password" type="password" placeholder="Password" class="p-3 border rounded-xl">
+        <input id="netSalary" type="number" placeholder="Net Salary" class="p-3 border rounded-xl">
+        <select id="role" class="p-3 border rounded-xl">
+          <option value="employee">Employee</option>
+          <option value="hr">HR</option>
+        </select>
+      </div>
+      <button onclick="addEmployee()" class="mt-4 bg-green-600 text-white px-8 py-3 rounded-2xl font-bold">ADD EMPLOYEE</button>
+    </div>
+
+    <!-- Employees Table -->
+    <div class="bg-white p-6 rounded-2xl shadow mb-8">
+      <h2 class="text-2xl font-bold mb-4">All Employees</h2>
+      <div id="usersTable" class="overflow-x-auto"></div>
+    </div>
+
+    <!-- Live Attendance -->
+    <div class="bg-white p-6 rounded-2xl shadow">
+      <h2 class="text-2xl font-bold mb-4">Live Attendance Today (auto-refreshes every 15s)</h2>
+      <div id="attendanceTable" class="overflow-x-auto"></div>
+    </div>
+  </div>
+
+  <script>
+    let currentUser = {};
+    function getUsers() { return JSON.parse(localStorage.getItem('users') || '[]'); }
+    function saveUsers(u) { localStorage.setItem('users', JSON.stringify(u)); }
+    function getAttendance() { return JSON.parse(localStorage.getItem('attendance') || '[]'); }
+
+    window.onload = () => {
+      currentUser = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+      if (!currentUser.id || !['admin','hr'].includes(currentUser.role)) {
+        window.location.href = 'index.html';
+      }
+      loadUsersTable();
+      loadAttendanceTable();
+      setInterval(loadAttendanceTable, 15000);
+    };
+
+    function getNextId() {
+      const users = getUsers();
+      const nums = users.map(u => parseInt(u.id.slice(2)) || 0);
+      const next = Math.max(1, ...nums) + 1;
+      return `mo${String(next).padStart(3,'0')}`;
+    }
+
+    function addEmployee() {
+      const first = document.getElementById('firstName').value.trim();
+      const last = document.getElementById('lastName').value.trim();
+      const pw = document.getElementById('password').value.trim();
+      const salary = parseFloat(document.getElementById('netSalary').value) || 0;
+      const role = document.getElementById('role').value;
+
+      if (!first || !last || !pw) return alert('Fill all fields');
+
+      const users = getUsers();
+      const newUser = {
+        id: getNextId(),
+        firstName: first,
+        lastName: last,
+        password: pw,
+        role: role,
+        netSalary: salary
+      };
+      users.push(newUser);
+      saveUsers(users);
+      loadUsersTable();
+      alert('Employee added successfully!');
+    }
+
+    function promoteToHR(id) {
+      if (currentUser.role !== 'admin') return alert('Only Admin can promote');
+      let users = getUsers();
+      const user = users.find(u => u.id === id);
+      if (user) {
+        user.role = 'hr';
+        saveUsers(users);
+        loadUsersTable();
+      }
+    }
+
+    function loadUsersTable() {
+      const users = getUsers();
+      let html = `<table class="w-full border-collapse"><thead><tr class="bg-gray-200"><th class="p-3 text-left">ID</th><th>Name</th><th>Role</th><th>Salary</th><th>Action</th></tr></thead><tbody>`;
+      users.forEach(u => {
+        const promoteBtn = (u.role === 'employee' && currentUser.role === 'admin') 
+          ? `<button onclick="promoteToHR('${u.id}')" class="bg-yellow-500 text-white px-4 py-1 rounded">Promote to HR</button>` 
+          : '';
+        html += `<tr class="border-t"><td class="p-3">${u.id}</td><td>${u.firstName} ${u.lastName}</td><td>${u.role}</td><td>${u.netSalary}</td><td>${promoteBtn}</td></tr>`;
+      });
+      html += `</tbody></table>`;
+      document.getElementById('usersTable').innerHTML = html;
+    }
+
+    function loadAttendanceTable() {
+      const users = getUsers();
+      const records = getAttendance();
+      const today = new Date().toLocaleDateString();
+      let html = `<table class="w-full border-collapse"><thead><tr class="bg-gray-200"><th class="p-3">ID</th><th>Name</th><th>Sign In</th><th>Sign Out</th></tr></thead><tbody>`;
+      users.forEach(u => {
+        const inRec = records.find(r => r.id === u.id && r.date === today && r.action === 'Sign In');
+        const outRec = records.find(r => r.id === u.id && r.date === today && r.action === 'Sign Out');
+        html += `<tr><td class="p-3">${u.id}</td><td>${u.firstName} ${u.lastName}</td><td>${inRec ? inRec.time : '--'}</td><td>${outRec ? outRec.time : '--'}</td></tr>`;
+      });
+      html += `</tbody></table>`;
+      document.getElementById('attendanceTable').innerHTML = html;
+    }
+
+    function logout() {
+      sessionStorage.removeItem('currentUser');
+      window.location.href = 'index.html';
+    }
+  </script>
+</body>
+</html>
