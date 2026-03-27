@@ -5,51 +5,78 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>mobanja — Sign In/Out</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>body { font-family: system-ui, sans-serif; }</style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
   <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
-    <div id="welcome" class="text-center mb-6"></div>
+    <div id="welcome" class="text-center mb-8"></div>
 
     <div class="grid grid-cols-2 gap-4">
-      <button id="signInBtn" onclick="signIn()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 rounded-2xl text-xl">SIGN IN<br><span class="text-sm">(Morning)</span></button>
-      <button id="signOutBtn" onclick="signOut()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-6 rounded-2xl text-xl">SIGN OUT<br><span class="text-sm">(Evening)</span></button>
+      <button id="signInBtn" onclick="signIn()" 
+              class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 rounded-2xl text-xl transition">
+        SIGN IN<br><span class="text-sm">(Morning)</span>
+      </button>
+      <button id="signOutBtn" onclick="signOut()" 
+              class="bg-red-600 hover:bg-red-700 text-white font-bold py-6 rounded-2xl text-xl transition">
+        SIGN OUT<br><span class="text-sm">(Evening)</span>
+      </button>
     </div>
 
     <div id="message" class="mt-8 text-center text-lg font-medium min-h-[60px]"></div>
-    <div id="checking" class="hidden mt-4 text-center">...</div> <!-- same spinner as before -->
   </div>
 
   <script>
+    const supabaseUrl = 'https://plrlufhgzfirdqjeqjhv.supabase.co';
+    const supabaseKey = 'sb_publishable_hVxITJF0v6WEyp5A7ZNqTA_E9Zy7l3V';
+    const supabase = Supabase.createClient(supabaseUrl, supabaseKey);
+
     let currentUser = {};
+
     const COMPANY_LAT = 0.313035;
     const COMPANY_LON = 32.580976;
     const ALLOWED_METERS = 100;
 
-    window.onload = () => {
-      currentUser = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
-      if (!currentUser.id || currentUser.role !== 'employee') {
-        alert('Please login first');
+    window.onload = async () => {
+      const userStr = sessionStorage.getItem('currentUser');
+      if (!userStr) {
         window.location.href = 'index.html';
         return;
       }
+      currentUser = JSON.parse(userStr);
+
+      if (currentUser.role !== 'employee') {
+        window.location.href = 'dashboard.html';
+        return;
+      }
+
       document.getElementById('welcome').innerHTML = `
         <h2 class="text-2xl font-bold">Welcome, ${currentUser.firstName} ${currentUser.lastName}</h2>
         <p class="text-sm text-gray-600">${currentUser.id}</p>
       `;
     };
 
-    function canSign(action) {
+    async function canSign(action) {
       const today = new Date().toLocaleDateString();
-      let records = JSON.parse(localStorage.getItem('attendance') || '[]');
-      const already = records.some(r => r.id === currentUser.id && r.date === today && r.action === action);
-      if (already) {
+      const { data } = await supabase
+        .from('attendance')
+        .select('action')
+        .eq('employee_id', currentUser.id)
+        .eq('date', today)
+        .eq('action', action);
+
+      if (data && data.length > 0) {
         showMessage(`You already ${action.toLowerCase()}ed today!`, 'red');
         return false;
       }
       if (action === 'Sign Out') {
-        const hasIn = records.some(r => r.id === currentUser.id && r.date === today && r.action === 'Sign In');
-        if (!hasIn) {
+        const { data: inData } = await supabase
+          .from('attendance')
+          .select('id')
+          .eq('employee_id', currentUser.id)
+          .eq('date', today)
+          .eq('action', 'Sign In');
+        if (!inData || inData.length === 0) {
           showMessage('You must sign in first today!', 'red');
           return false;
         }
@@ -57,36 +84,42 @@
       return true;
     }
 
-    function signIn() { if (canSign('Sign In')) checkLocationAndRecord('Sign In'); }
-    function signOut() { if (canSign('Sign Out')) checkLocationAndRecord('Sign Out'); }
+    async function signIn() { if (await canSign('Sign In')) checkLocationAndRecord('Sign In'); }
+    async function signOut() { if (await canSign('Sign Out')) checkLocationAndRecord('Sign Out'); }
 
-    // === Geolocation + Haversine (same as before) ===
     function checkLocationAndRecord(action) {
       if (!navigator.geolocation) return showMessage('Geolocation not supported', 'red');
+
       setChecking(true);
 
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
+        async (pos) => {
           const distance = getDistanceMeters(pos.coords.latitude, pos.coords.longitude);
           if (distance <= ALLOWED_METERS) {
             const now = new Date();
             const record = {
-              id: currentUser.id,
-              firstName: currentUser.firstName,
-              lastName: currentUser.lastName,
+              employee_id: currentUser.id,
               action: action,
               time: now.toLocaleTimeString(),
               date: now.toLocaleDateString(),
-              location: { distance_m: Math.round(distance) }
+              distance_m: Math.round(distance)
             };
-            saveRecord(record);
-            showMessage(`✅ ${action} successful at ${record.time}`, 'green');
+
+            const { error } = await supabase.from('attendance').insert([record]);
+            if (error) {
+              showMessage('Error saving record: ' + error.message, 'red');
+            } else {
+              showMessage(`✅ ${action} successful at ${record.time}`, 'green');
+            }
           } else {
             showMessage(`You are ${Math.round(distance)} m away. Must be within ${ALLOWED_METERS} m.`, 'red');
           }
           setChecking(false);
         },
-        (err) => { setChecking(false); showMessage('Location error: ' + err.message, 'red'); },
+        (err) => {
+          setChecking(false);
+          showMessage('Location error: ' + err.message, 'red');
+        },
         { enableHighAccuracy: true, timeout: 10000 }
       );
     }
@@ -97,31 +130,26 @@
       const dLat = toRad(COMPANY_LAT - lat);
       const dLon = toRad(COMPANY_LON - lon);
       const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat)) * Math.cos(toRad(COMPANY_LAT)) * Math.sin(dLon/2)**2;
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    }
-
-    function saveRecord(record) {
-      let records = JSON.parse(localStorage.getItem('attendance') || '[]');
-      records.push(record);
-      localStorage.setItem('attendance', JSON.stringify(records));
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     function showMessage(text, color) {
-      document.getElementById('message').innerHTML = `<span class="text-${color}-600">${text}</span>`;
-      setTimeout(() => document.getElementById('message').innerHTML = '', 4000);
+      const msg = document.getElementById('message');
+      msg.innerHTML = `<span class="text-${color}-600">${text}</span>`;
+      setTimeout(() => msg.innerHTML = '', 4000);
     }
 
     function setChecking(state) {
-      // same spinner code as your previous file
-      const chk = document.getElementById('checking');
       const inBtn = document.getElementById('signInBtn');
       const outBtn = document.getElementById('signOutBtn');
       if (state) {
-        chk.classList.remove('hidden');
         inBtn.disabled = outBtn.disabled = true;
+        inBtn.classList.add('opacity-60', 'cursor-not-allowed');
+        outBtn.classList.add('opacity-60', 'cursor-not-allowed');
       } else {
-        chk.classList.add('hidden');
         inBtn.disabled = outBtn.disabled = false;
+        inBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+        outBtn.classList.remove('opacity-60', 'cursor-not-allowed');
       }
     }
   </script>
