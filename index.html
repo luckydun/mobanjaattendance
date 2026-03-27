@@ -28,10 +28,14 @@
     <div id="message" class="mt-6 text-center text-lg font-medium min-h-[50px]"></div>
   </div>
 
-  <script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
   const supabaseUrl = 'https://plrlufhgzfirdqjeqjhv.supabase.co';
   const supabaseKey = 'sb_publishable_hVxITJF0v6WEyp5A7ZNqTA_E9Zy7l3V';
-  const supabase = Supabase.createClient(supabaseUrl, supabaseKey);
+  
+  // Correct way to create client from CDN
+  const { createClient } = supabase;
+  const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
   async function login() {
     const id = document.getElementById('employeeId').value.trim();
@@ -42,7 +46,9 @@
       return showMessage('Enter ID and password', 'red');
     }
 
-    const { data: user, error } = await supabase
+    showMessage('Checking login...', 'blue');
+
+    const { data: user, error } = await supabaseClient
       .from('users')
       .select('*')
       .eq('id', id)
@@ -55,6 +61,8 @@
 
     sessionStorage.setItem('currentUser', JSON.stringify(user));
 
+    showMessage('Login successful! Redirecting...', 'green');
+
     if (user.role === 'employee') {
       window.location.href = 'attendance.html';
     } else {
@@ -65,14 +73,19 @@
   function showMessage(text, color) {
     const msg = document.getElementById("message");
     msg.innerHTML = `<span class="text-${color}-600">${text}</span>`;
-    setTimeout(() => msg.innerHTML = '', 4000);
+    setTimeout(() => { msg.innerHTML = ''; }, 4000);
   }
 
-  // Auto seed admin if not exists
+  // Auto-seed admin user on page load
   async function seedAdmin() {
-    const { data } = await supabase.from('users').select('id').eq('id', 'mo001').single();
+    const { data } = await supabaseClient
+      .from('users')
+      .select('id')
+      .eq('id', 'mo001')
+      .single();
+
     if (!data) {
-      await supabase.from('users').insert([{
+      await supabaseClient.from('users').insert([{
         id: 'mo001',
         firstName: 'Super',
         lastName: 'Admin',
@@ -80,13 +93,12 @@
         role: 'admin',
         netSalary: 0
       }]);
-      showMessage('Admin user created successfully!', 'green');
+      showMessage('Admin account ready!', 'green');
     }
   }
 
-  // Run seed on page load
   window.onload = seedAdmin;
 </script>
-
+  
 </body>
 </html>
