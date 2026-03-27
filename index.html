@@ -29,58 +29,64 @@
   </div>
 
   <script>
-    const supabaseUrl = 'https://plrlufhgzfirdqjeqjhv.supabase.co';
-    const supabaseKey = 'sb_publishable_hVxITJF0v6WEyp5A7ZNqTA_E9Zy7l3V';
-    const supabase = Supabase.createClient(supabaseUrl, supabaseKey);
+  const supabaseUrl = 'https://plrlufhgzfirdqjeqjhv.supabase.co';
+  const supabaseKey = 'sb_publishable_hVxITJF0v6WEyp5A7ZNqTA_E9Zy7l3V';
+  const supabase = Supabase.createClient(supabaseUrl, supabaseKey);
 
-    async function login() {
-      const id = document.getElementById('employeeId').value.trim();
-      const pw = document.getElementById('employeePassword').value.trim();
-      const msg = document.getElementById("message");
+  async function login() {
+    const id = document.getElementById('employeeId').value.trim();
+    const pw = document.getElementById('employeePassword').value.trim();
+    const msgEl = document.getElementById("message");
 
-      if (!id || !pw) return showMessage('Enter ID and password', 'red');
-
-      const { data: user, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', id)
-        .eq('password', pw)
-        .single();
-
-      if (error || !user) {
-        return showMessage('Invalid ID or password', 'red');
-      }
-
-      sessionStorage.setItem('currentUser', JSON.stringify(user));
-
-      if (user.role === 'employee') {
-        window.location.href = 'attendance.html';
-      } else {
-        window.location.href = 'dashboard.html';
-      }
+    if (!id || !pw) {
+      return showMessage('Enter ID and password', 'red');
     }
 
-    function showMessage(text, color) {
-      const msg = document.getElementById("message");
-      msg.innerHTML = `<span class="text-${color}-600">${text}</span>`;
-      setTimeout(() => msg.innerHTML = '', 4000);
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .eq('password', pw)
+      .single();
+
+    if (error || !user) {
+      return showMessage('Invalid ID or password', 'red');
     }
 
-    // Seed Admin if not exists
-    async function seedAdmin() {
-      const { data } = await supabase.from('users').select('id').eq('id', 'mo001').single();
-      if (!data) {
-        await supabase.from('users').insert([{
-          id: 'mo001',
-          firstName: 'Super',
-          lastName: 'Admin',
-          password: 'admin123',
-          role: 'admin',
-          netSalary: 0
-        }]);
-      }
+    sessionStorage.setItem('currentUser', JSON.stringify(user));
+
+    if (user.role === 'employee') {
+      window.location.href = 'attendance.html';
+    } else {
+      window.location.href = 'dashboard.html';
     }
-    seedAdmin();
-  </script>
+  }
+
+  function showMessage(text, color) {
+    const msg = document.getElementById("message");
+    msg.innerHTML = `<span class="text-${color}-600">${text}</span>`;
+    setTimeout(() => msg.innerHTML = '', 4000);
+  }
+
+  // Auto seed admin if not exists
+  async function seedAdmin() {
+    const { data } = await supabase.from('users').select('id').eq('id', 'mo001').single();
+    if (!data) {
+      await supabase.from('users').insert([{
+        id: 'mo001',
+        firstName: 'Super',
+        lastName: 'Admin',
+        password: 'admin123',
+        role: 'admin',
+        netSalary: 0
+      }]);
+      showMessage('Admin user created successfully!', 'green');
+    }
+  }
+
+  // Run seed on page load
+  window.onload = seedAdmin;
+</script>
+
 </body>
 </html>
