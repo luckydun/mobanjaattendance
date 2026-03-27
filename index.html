@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>mobanja Attendance System</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>body { font-family: system-ui, sans-serif; }</style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
@@ -28,35 +29,27 @@
   </div>
 
   <script>
-    // Seed Admin on first run
-    if (!localStorage.getItem('users')) {
-      localStorage.setItem('users', JSON.stringify([{
-        id: 'mo001',
-        firstName: 'Super',
-        lastName: 'Admin',
-        password: 'admin123',
-        role: 'admin',
-        netSalary: 0
-      }]));
-    }
+    const supabaseUrl = 'https://plrlufhgzfirdqjeqjhv.supabase.co';
+    const supabaseKey = 'sb_publishable_hVxITJF0v6WEyp5A7ZNqTA_E9Zy7l3V';
+    const supabase = Supabase.createClient(supabaseUrl, supabaseKey);
 
-    function getUsers() { return JSON.parse(localStorage.getItem('users') || '[]'); }
-    function saveUsers(users) { localStorage.setItem('users', JSON.stringify(users)); }
-
-    function showMessage(text, color) {
-      const msg = document.getElementById("message");
-      msg.innerHTML = `<span class="text-${color}-600">${text}</span>`;
-      setTimeout(() => msg.innerHTML = '', 4000);
-    }
-
-    function login() {
+    async function login() {
       const id = document.getElementById('employeeId').value.trim();
       const pw = document.getElementById('employeePassword').value.trim();
+      const msg = document.getElementById("message");
+
       if (!id || !pw) return showMessage('Enter ID and password', 'red');
 
-      const users = getUsers();
-      const user = users.find(u => u.id === id && u.password === pw);
-      if (!user) return showMessage('Invalid ID or password', 'red');
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', id)
+        .eq('password', pw)
+        .single();
+
+      if (error || !user) {
+        return showMessage('Invalid ID or password', 'red');
+      }
 
       sessionStorage.setItem('currentUser', JSON.stringify(user));
 
@@ -66,6 +59,28 @@
         window.location.href = 'dashboard.html';
       }
     }
+
+    function showMessage(text, color) {
+      const msg = document.getElementById("message");
+      msg.innerHTML = `<span class="text-${color}-600">${text}</span>`;
+      setTimeout(() => msg.innerHTML = '', 4000);
+    }
+
+    // Seed Admin if not exists
+    async function seedAdmin() {
+      const { data } = await supabase.from('users').select('id').eq('id', 'mo001').single();
+      if (!data) {
+        await supabase.from('users').insert([{
+          id: 'mo001',
+          firstName: 'Super',
+          lastName: 'Admin',
+          password: 'admin123',
+          role: 'admin',
+          netSalary: 0
+        }]);
+      }
+    }
+    seedAdmin();
   </script>
 </body>
 </html>
