@@ -13,7 +13,7 @@
   <div class="max-w-4xl mx-auto">
     <div class="flex justify-between items-center mb-8">
       <h1 class="text-4xl font-bold text-blue-600">mobanja Dashboard</h1>
-      <button onclick="logout()" class="bg-red-600 text-white px-6 py-3 rounded-xl">Logout</button>
+      <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl">Logout</button>
     </div>
 
     <div class="bg-white p-8 rounded-2xl shadow mb-8">
@@ -35,7 +35,7 @@
         ADD EMPLOYEE
       </button>
 
-      <div id="message" class="mt-6 text-center text-lg font-medium"></div>
+      <div id="message" class="mt-6 text-center text-lg font-medium min-h-[30px]"></div>
     </div>
 
     <div class="bg-white p-8 rounded-2xl shadow">
@@ -45,7 +45,7 @@
   </div>
 
   <script>
-    // === Supabase Setup ===
+    // Supabase Client
     const supabaseUrl = 'https://plrlufhgzfirdqjeqjhv.supabase.co';
     const supabaseKey = 'sb_publishable_hVxITJF0v6WEyp5A7ZNqTA_E9Zy7l3V';
     const supabase = Supabase.createClient(supabaseUrl, supabaseKey);
@@ -54,10 +54,13 @@
 
     window.onload = async () => {
       const userStr = sessionStorage.getItem('currentUser');
-      if (!userStr) return window.location.href = 'index.html';
+      if (!userStr) {
+        window.location.href = 'index.html';
+        return;
+      }
 
       currentUser = JSON.parse(userStr);
-      document.getElementById('message').innerHTML = `<span class="text-green-600">Welcome, ${currentUser.firstName} ${currentUser.lastName}</span>`;
+      document.getElementById('message').innerHTML = `<span class="text-green-600">Welcome, ${currentUser.firstName || ''} ${currentUser.lastName || ''}</span>`;
 
       await loadUsersTable();
     };
@@ -76,7 +79,7 @@
 
       showMessage("Adding employee...", "blue");
 
-      // Generate next ID
+      // Generate next moXXX ID
       const { data: last } = await supabase.from('users').select('id').order('id', { ascending: false }).limit(1).single();
       let nextId = 'mo002';
       if (last && last.id) {
@@ -95,7 +98,7 @@
 
       if (error) {
         console.error(error);
-        showMessage("Failed: " + error.message, "red");
+        showMessage("Failed to add employee: " + error.message, "red");
       } else {
         showMessage(`✅ Employee ${nextId} added successfully!`, "green");
         // Clear form
@@ -116,8 +119,7 @@
     async function loadUsersTable() {
       const { data, error } = await supabase.from('users').select('*').order('id');
       if (error) {
-        document.getElementById('usersTable').innerHTML = `<p class="text-red-600">Error loading employees: ${error.message}</p>`;
-        console.error(error);
+        document.getElementById('usersTable').innerHTML = `<p class="text-red-600 p-4">Error loading employees: ${error.message}</p>`;
         return;
       }
 
@@ -131,15 +133,15 @@
 
       (data || []).forEach(u => {
         html += `<tr class="border-t">
-          <td class="p-3">${u.id}</td>
-          <td class="p-3">${u.firstName} ${u.lastName}</td>
+          <td class="p-3 font-mono">${u.id}</td>
+          <td class="p-3">${u.firstName || ''} ${u.lastName || ''}</td>
           <td class="p-3">${u.role}</td>
-          <td class="p-3">${u.netSalary}</td>
+          <td class="p-3">${u.netSalary || 0}</td>
         </tr>`;
       });
 
       html += `</tbody></table>`;
-      document.getElementById('usersTable').innerHTML = html || '<p>No employees yet.</p>';
+      document.getElementById('usersTable').innerHTML = html || '<p class="p-4 text-gray-500">No employees yet.</p>';
     }
 
     function logout() {
