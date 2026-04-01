@@ -13,10 +13,10 @@
     <div class="flex justify-between items-center mb-8">
       <h1 class="text-4xl font-bold text-blue-600">mobanja Dashboard</h1>
       <span id="welcomeUser" class="text-lg font-medium text-gray-700"></span>
-      <button onclick="logout()" class="bg-red-600 text-white px-6 py-3 rounded-xl">Logout</button>
+      <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl">Logout</button>
     </div>
 
-    <!-- Add Employee Form -->
+    <!-- Add New Employee -->
     <div class="bg-white p-6 rounded-2xl shadow mb-8">
       <h2 class="text-2xl font-bold mb-4">Add New Employee</h2>
       <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -29,28 +29,23 @@
           <option value="hr">HR</option>
         </select>
       </div>
-      <button onclick="addEmployee()" class="mt-4 bg-green-600 text-white px-8 py-3 rounded-2xl font-bold">ADD EMPLOYEE</button>
+      <button onclick="addEmployee()" class="mt-4 bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-2xl font-bold">ADD EMPLOYEE</button>
+      <div id="addMessage" class="mt-3 text-center"></div>
     </div>
 
-    <!-- Employees Table -->
+    <!-- All Employees -->
     <div class="bg-white p-6 rounded-2xl shadow mb-8">
       <h2 class="text-2xl font-bold mb-4">All Employees</h2>
       <div id="usersTable" class="overflow-x-auto"></div>
     </div>
 
-    <!-- Live Attendance + Download -->
+    <!-- Live Attendance -->
     <div class="bg-white p-6 rounded-2xl shadow">
       <div class="flex justify-between items-center mb-6">
         <h2 class="text-2xl font-bold">Live Attendance Today</h2>
         <div class="flex gap-3">
-          <button onclick="downloadExcel()" 
-                  class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-medium flex items-center gap-2">
-            📊 Download Excel
-          </button>
-          <button onclick="downloadPDF()" 
-                  class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-medium flex items-center gap-2">
-            📄 Download PDF
-          </button>
+          <button onclick="downloadExcel()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-medium">📊 Download Excel</button>
+          <button onclick="downloadPDF()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-medium">📄 Download PDF</button>
         </div>
       </div>
       <div id="attendanceTable" class="overflow-x-auto"></div>
@@ -60,7 +55,8 @@
   <script>
     const supabaseUrl = 'https://plrlufhgzfirdqjeqjhv.supabase.co';
     const supabaseKey = 'sb_publishable_hVxITJF0v6WEyp5A7ZNqTA_E9Zy7l3V';
-    const supabase = Supabase.createClient(supabaseUrl, supabaseKey);
+    const { createClient } = supabase;
+    const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
     let currentUser = {};
 
@@ -69,14 +65,13 @@
       if (!userStr) return window.location.href = 'index.html';
 
       currentUser = JSON.parse(userStr);
-      if (!['admin', 'hr'].includes(currentUser.role)) return window.location.href = 'index.html';
+      if (!['admin','hr'].includes(currentUser.role)) return window.location.href = 'index.html';
 
-      document.getElementById('welcomeUser').textContent = 
-        `Welcome, ${currentUser.firstName} ${currentUser.lastName} (${currentUser.role.toUpperCase()})`;
+      document.getElementById('welcomeUser').textContent = `Welcome, ${currentUser.firstName} ${currentUser.lastName}`;
 
       await loadUsersTable();
       await loadAttendanceTable();
-      setInterval(loadAttendanceTable, 10000); // refresh every 10s
+      setInterval(loadAttendanceTable, 10000);
     };
 
     async function addEmployee() {
@@ -86,17 +81,20 @@
       const salary = parseFloat(document.getElementById('netSalary').value) || 0;
       const role = document.getElementById('role').value;
 
-      if (!first || !last || !pw) return alert('Please fill First Name, Last Name and Password');
+      if (!first || !last || !pw) {
+        showAddMessage('Please fill all fields', 'red');
+        return;
+      }
 
-      // Simple auto ID generation
-      const { data: lastUser } = await supabase.from('users').select('id').order('id', { ascending: false }).limit(1).single();
+      // Auto generate next ID
+      const { data: last } = await supabaseClient.from('users').select('id').order('id', { ascending: false }).limit(1).single();
       let nextId = 'mo002';
-      if (lastUser && lastUser.id) {
-        const num = parseInt(lastUser.id.replace('mo', '')) || 1;
+      if (last && last.id) {
+        const num = parseInt(last.id.replace('mo','')) || 1;
         nextId = `mo${String(num + 1).padStart(3, '0')}`;
       }
 
-      const { error } = await supabase.from('users').insert([{
+      const { error } = await supabaseClient.from('users').insert([{
         id: nextId,
         firstName: first,
         lastName: last,
@@ -105,9 +103,11 @@
         netSalary: salary
       }]);
 
-      if (error) alert('Error adding employee: ' + error.message);
-      else {
-        alert(`Employee ${nextId} added successfully!`);
+      if (error) {
+        showAddMessage('Error: ' + error.message, 'red');
+      } else {
+        showAddMessage(`Employee ${nextId} added successfully!`, 'green');
+        // Clear form
         document.getElementById('firstName').value = '';
         document.getElementById('lastName').value = '';
         document.getElementById('password').value = '';
@@ -116,121 +116,55 @@
       }
     }
 
+    function showAddMessage(text, color) {
+      const el = document.getElementById('addMessage');
+      el.innerHTML = `<span class="text-${color}-600">${text}</span>`;
+      setTimeout(() => el.innerHTML = '', 4000);
+    }
+
     async function loadUsersTable() {
-      const { data: users, error } = await supabase.from('users').select('*').order('id');
-      if (error) return console.error(error);
-
-      let html = `
-        <table class="w-full border-collapse text-sm">
-          <thead><tr class="bg-gray-100">
-            <th class="p-3 text-left">ID</th>
-            <th class="p-3 text-left">Name</th>
-            <th class="p-3 text-left">Role</th>
-            <th class="p-3 text-left">Salary</th>
-            <th class="p-3 text-left">Action</th>
-          </tr></thead>
-          <tbody>
-      `;
-
+      const { data: users } = await supabaseClient.from('users').select('*').order('id');
+      let html = `<table class="w-full border-collapse"><thead><tr class="bg-gray-100"><th class="p-3 text-left">ID</th><th>Name</th><th>Role</th><th>Salary</th><th>Action</th></tr></thead><tbody>`;
       users.forEach(u => {
-        const promoteBtn = (u.role === 'employee' && currentUser.role === 'admin') 
-          ? `<button onclick="promoteToHR('${u.id}')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-1 rounded text-xs">Make HR</button>` 
-          : '';
-        html += `
-          <tr class="border-t hover:bg-gray-50">
-            <td class="p-3 font-mono">${u.id}</td>
-            <td class="p-3">${u.firstName} ${u.lastName}</td>
-            <td class="p-3">${u.role}</td>
-            <td class="p-3">${u.netSalary}</td>
-            <td class="p-3">${promoteBtn}</td>
-          </tr>`;
+        const btn = (u.role === 'employee' && currentUser.role === 'admin') 
+          ? `<button onclick="promoteToHR('${u.id}')" class="bg-yellow-500 text-white px-3 py-1 rounded text-xs">Make HR</button>` : '';
+        html += `<tr class="border-t"><td class="p-3">${u.id}</td><td>${u.firstName} ${u.lastName}</td><td>${u.role}</td><td>${u.netSalary}</td><td>${btn}</td></tr>`;
       });
-
       html += `</tbody></table>`;
       document.getElementById('usersTable').innerHTML = html;
     }
 
     async function promoteToHR(id) {
       if (currentUser.role !== 'admin') return alert('Only Admin can promote');
-      const { error } = await supabase.from('users').update({ role: 'hr' }).eq('id', id);
-      if (error) alert(error.message);
-      else {
-        alert('Promoted to HR');
-        loadUsersTable();
-      }
+      await supabaseClient.from('users').update({ role: 'hr' }).eq('id', id);
+      loadUsersTable();
     }
 
     async function loadAttendanceTable() {
       const today = new Date().toLocaleDateString();
-      const { data: records } = await supabase
-        .from('attendance')
-        .select('*, users!inner(firstName, lastName)')
-        .eq('date', today)
-        .order('time');
+      const { data: records } = await supabaseClient.from('attendance').select('*').eq('date', today);
+      const { data: users } = await supabaseClient.from('users').select('id, firstName, lastName');
 
-      const { data: allUsers } = await supabase.from('users').select('id, firstName, lastName, role');
-
-      let html = `
-        <table class="w-full border-collapse text-sm">
-          <thead><tr class="bg-gray-100">
-            <th class="p-3 text-left">ID</th>
-            <th class="p-3 text-left">Name</th>
-            <th class="p-3 text-left">Sign In</th>
-            <th class="p-3 text-left">Sign Out</th>
-            <th class="p-3 text-left">Status</th>
-          </tr></thead>
-          <tbody>
-      `;
-
-      allUsers.forEach(u => {
+      let html = `<table class="w-full border-collapse"><thead><tr class="bg-gray-100"><th class="p-3">ID</th><th>Name</th><th>Sign In</th><th>Sign Out</th><th>Status</th></tr></thead><tbody>`;
+      users.forEach(u => {
         const inRec = records.find(r => r.employee_id === u.id && r.action === 'Sign In');
         const outRec = records.find(r => r.employee_id === u.id && r.action === 'Sign Out');
-
         let status = 'Absent';
-        let statusColor = 'text-red-600';
-        if (inRec && outRec) { status = 'Completed'; statusColor = 'text-blue-600'; }
-        else if (inRec) { status = 'Present'; statusColor = 'text-green-600'; }
-
-        html += `
-          <tr class="border-t hover:bg-gray-50">
-            <td class="p-3 font-mono">${u.id}</td>
-            <td class="p-3">${u.firstName} ${u.lastName}</td>
-            <td class="p-3">${inRec ? inRec.time : '--'}</td>
-            <td class="p-3">${outRec ? outRec.time : '--'}</td>
-            <td class="p-3 ${statusColor} font-medium">${status}</td>
-          </tr>`;
+        if (inRec && outRec) status = 'Completed';
+        else if (inRec) status = 'Present';
+        html += `<tr><td class="p-3">${u.id}</td><td>${u.firstName} ${u.lastName}</td><td>${inRec ? inRec.time : '--'}</td><td>${outRec ? outRec.time : '--'}</td><td>${status}</td></tr>`;
       });
-
       html += `</tbody></table>`;
       document.getElementById('attendanceTable').innerHTML = html;
-    }
-
-    async function downloadExcel() {
-      const today = new Date().toLocaleDateString();
-      const { data: records } = await supabase.from('attendance').select('*, users(firstName, lastName)').eq('date', today);
-
-      let csv = "ID,Name,Sign In Time,Sign Out Time,Status\n";
-      // ... (same logic as before - group by employee)
-      // For simplicity, you can enhance it later
-
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Mobanja_Attendance_${today.replace(/\//g,'-')}.csv`;
-      a.click();
-    }
-
-    function downloadPDF() {
-      // Same as previous version - opens print dialog with table
-      alert("PDF download ready (using browser print). You can improve styling later.");
-      window.print();
     }
 
     function logout() {
       sessionStorage.removeItem('currentUser');
       window.location.href = 'index.html';
     }
+
+    async function downloadExcel() { alert("Excel download coming in next increment"); }
+    function downloadPDF() { window.print(); }
   </script>
 </body>
 </html>
