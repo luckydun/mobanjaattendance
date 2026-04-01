@@ -9,161 +9,140 @@
   <style>body { font-family: system-ui, sans-serif; }</style>
 </head>
 <body class="bg-gray-100 min-h-screen p-6">
-  <div class="max-w-6xl mx-auto">
+
+  <div class="max-w-4xl mx-auto">
     <div class="flex justify-between items-center mb-8">
       <h1 class="text-4xl font-bold text-blue-600">mobanja Dashboard</h1>
-      <span id="welcomeUser" class="text-lg font-medium text-gray-700"></span>
-      <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl">Logout</button>
+      <button onclick="logout()" class="bg-red-600 text-white px-6 py-3 rounded-xl">Logout</button>
     </div>
 
-    <!-- Add New Employee -->
-    <div class="bg-white p-6 rounded-2xl shadow mb-8">
-      <h2 class="text-2xl font-bold mb-4">Add New Employee</h2>
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <input id="firstName" placeholder="First Name" class="p-3 border rounded-xl">
-        <input id="lastName" placeholder="Last Name" class="p-3 border rounded-xl">
-        <input id="password" type="password" placeholder="Password" class="p-3 border rounded-xl">
-        <input id="netSalary" type="number" placeholder="Net Salary" class="p-3 border rounded-xl">
-        <select id="role" class="p-3 border rounded-xl">
+    <div class="bg-white p-8 rounded-2xl shadow mb-8">
+      <h2 class="text-2xl font-bold mb-6">Add New Employee</h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <input id="firstName" placeholder="First Name" class="p-4 border rounded-xl">
+        <input id="lastName" placeholder="Last Name" class="p-4 border rounded-xl">
+        <input id="password" type="password" placeholder="Password" class="p-4 border rounded-xl">
+        <input id="netSalary" type="number" placeholder="Net Salary" class="p-4 border rounded-xl">
+        <select id="role" class="p-4 border rounded-xl">
           <option value="employee">Employee</option>
           <option value="hr">HR</option>
         </select>
       </div>
-      <button onclick="addEmployee()" class="mt-4 bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-2xl font-bold">ADD EMPLOYEE</button>
-      <div id="addMessage" class="mt-4 text-center font-medium"></div>
+
+      <button onclick="addEmployee()" 
+              class="mt-6 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-2xl text-lg">
+        ADD EMPLOYEE
+      </button>
+
+      <div id="message" class="mt-6 text-center text-lg font-medium"></div>
     </div>
 
-    <!-- All Employees -->
-    <div class="bg-white p-6 rounded-2xl shadow mb-8">
-      <h2 class="text-2xl font-bold mb-4">All Employees</h2>
-      <div id="usersTable" class="overflow-x-auto min-h-[100px]"></div>
-    </div>
-
-    <!-- Live Attendance -->
-    <div class="bg-white p-6 rounded-2xl shadow">
-      <h2 class="text-2xl font-bold mb-4">Live Attendance Today</h2>
-      <div id="attendanceTable" class="overflow-x-auto"></div>
+    <div class="bg-white p-8 rounded-2xl shadow">
+      <h2 class="text-2xl font-bold mb-6">All Employees</h2>
+      <div id="usersTable" class="overflow-x-auto"></div>
     </div>
   </div>
 
   <script>
+    // === Supabase Setup ===
     const supabaseUrl = 'https://plrlufhgzfirdqjeqjhv.supabase.co';
     const supabaseKey = 'sb_publishable_hVxITJF0v6WEyp5A7ZNqTA_E9Zy7l3V';
-    const { createClient } = supabase;
-    const supabaseClient = createClient(supabaseUrl, supabaseKey);
+    const supabase = Supabase.createClient(supabaseUrl, supabaseKey);
 
     let currentUser = {};
 
-    // Debug: Confirm script loaded
-    console.log("Dashboard script loaded successfully");
-
     window.onload = async () => {
-      console.log("window.onload fired");
       const userStr = sessionStorage.getItem('currentUser');
-      if (!userStr) {
-        console.log("No currentUser in sessionStorage");
-        window.location.href = 'index.html';
-        return;
-      }
+      if (!userStr) return window.location.href = 'index.html';
 
       currentUser = JSON.parse(userStr);
-      console.log("Current user:", currentUser);
-
-      if (!['admin','hr'].includes(currentUser.role)) {
-        window.location.href = 'index.html';
-        return;
-      }
-
-      document.getElementById('welcomeUser').textContent = `Welcome, ${currentUser.firstName} ${currentUser.lastName}`;
+      document.getElementById('message').innerHTML = `<span class="text-green-600">Welcome, ${currentUser.firstName} ${currentUser.lastName}</span>`;
 
       await loadUsersTable();
-      await loadAttendanceTable();
-      setInterval(loadAttendanceTable, 10000);
     };
 
     async function addEmployee() {
-      console.log("addEmployee() called");
-      const first = document.getElementById('firstName').value.trim();
-      const last = document.getElementById('lastName').value.trim();
-      const pw = document.getElementById('password').value.trim();
-      const salary = parseFloat(document.getElementById('netSalary').value) || 0;
+      const firstName = document.getElementById('firstName').value.trim();
+      const lastName = document.getElementById('lastName').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const netSalary = parseFloat(document.getElementById('netSalary').value) || 0;
       const role = document.getElementById('role').value;
 
-      if (!first || !last || !pw) {
-        showMessage('Please fill all fields', 'red');
+      if (!firstName || !lastName || !password) {
+        showMessage("Please fill First Name, Last Name and Password", "red");
         return;
       }
 
-      showMessage('Adding employee...', 'blue');
+      showMessage("Adding employee...", "blue");
 
-      // Auto ID
-      const { data: lastUser } = await supabaseClient.from('users').select('id').order('id', { ascending: false }).limit(1).single();
+      // Generate next ID
+      const { data: last } = await supabase.from('users').select('id').order('id', { ascending: false }).limit(1).single();
       let nextId = 'mo002';
-      if (lastUser && lastUser.id) {
-        const num = parseInt(lastUser.id.replace('mo', '')) || 1;
+      if (last && last.id) {
+        const num = parseInt(last.id.replace('mo', '')) || 1;
         nextId = `mo${String(num + 1).padStart(3, '0')}`;
       }
 
-      const { error } = await supabaseClient.from('users').insert([{
+      const { error } = await supabase.from('users').insert([{
         id: nextId,
-        firstName: first,
-        lastName: last,
-        password: pw,
+        firstName: firstName,
+        lastName: lastName,
+        password: password,
         role: role,
-        netSalary: salary
+        netSalary: netSalary
       }]);
 
       if (error) {
-        console.error("Insert error:", error);
-        showMessage('Error: ' + error.message, 'red');
+        console.error(error);
+        showMessage("Failed: " + error.message, "red");
       } else {
-        showMessage(`✅ Employee ${nextId} added successfully!`, 'green');
+        showMessage(`✅ Employee ${nextId} added successfully!`, "green");
+        // Clear form
         document.getElementById('firstName').value = '';
         document.getElementById('lastName').value = '';
         document.getElementById('password').value = '';
         document.getElementById('netSalary').value = '';
-        loadUsersTable();
+        await loadUsersTable();
       }
     }
 
     function showMessage(text, color) {
-      const el = document.getElementById('addMessage');
-      el.innerHTML = `<span class="text-${color}-600">${text}</span>`;
-      setTimeout(() => el.innerHTML = '', 5000);
+      const msg = document.getElementById('message');
+      msg.innerHTML = `<span class="text-${color}-600">${text}</span>`;
+      setTimeout(() => msg.innerHTML = '', 5000);
     }
 
     async function loadUsersTable() {
-      const { data: users, error } = await supabaseClient.from('users').select('*').order('id');
-      if (error) console.error(error);
+      const { data, error } = await supabase.from('users').select('*').order('id');
+      if (error) {
+        document.getElementById('usersTable').innerHTML = `<p class="text-red-600">Error loading employees: ${error.message}</p>`;
+        console.error(error);
+        return;
+      }
 
-      let html = `<table class="w-full border-collapse text-sm"><thead><tr class="bg-gray-100"><th class="p-3 text-left">ID</th><th>Name</th><th>Role</th><th>Salary</th></tr></thead><tbody>`;
-      (users || []).forEach(u => {
-        html += `<tr class="border-t"><td class="p-3">${u.id}</td><td>${u.firstName} ${u.lastName}</td><td>${u.role}</td><td>${u.netSalary}</td></tr>`;
+      let html = `<table class="w-full border-collapse text-sm">
+        <thead><tr class="bg-gray-100">
+          <th class="p-3 text-left">ID</th>
+          <th class="p-3 text-left">Name</th>
+          <th class="p-3 text-left">Role</th>
+          <th class="p-3 text-left">Salary</th>
+        </tr></thead><tbody>`;
+
+      (data || []).forEach(u => {
+        html += `<tr class="border-t">
+          <td class="p-3">${u.id}</td>
+          <td class="p-3">${u.firstName} ${u.lastName}</td>
+          <td class="p-3">${u.role}</td>
+          <td class="p-3">${u.netSalary}</td>
+        </tr>`;
       });
-      html += `</tbody></table>`;
-      document.getElementById('usersTable').innerHTML = html;
-    }
 
-    async function loadAttendanceTable() {
-      const today = new Date().toLocaleDateString();
-      const { data: records } = await supabaseClient.from('attendance').select('*').eq('date', today);
-      const { data: users } = await supabaseClient.from('users').select('id, firstName, lastName');
-
-      let html = `<table class="w-full border-collapse text-sm"><thead><tr class="bg-gray-100"><th class="p-3">ID</th><th>Name</th><th>Sign In</th><th>Sign Out</th><th>Status</th></tr></thead><tbody>`;
-      (users || []).forEach(u => {
-        const inRec = (records || []).find(r => r.employee_id === u.id && r.action === 'Sign In');
-        const outRec = (records || []).find(r => r.employee_id === u.id && r.action === 'Sign Out');
-        let status = 'Absent';
-        if (inRec && outRec) status = 'Completed';
-        else if (inRec) status = 'Present';
-        html += `<tr><td class="p-3">${u.id}</td><td>${u.firstName} ${u.lastName}</td><td>${inRec ? inRec.time : '--'}</td><td>${outRec ? outRec.time : '--'}</td><td>${status}</td></tr>`;
-      });
       html += `</tbody></table>`;
-      document.getElementById('attendanceTable').innerHTML = html;
+      document.getElementById('usersTable').innerHTML = html || '<p>No employees yet.</p>';
     }
 
     function logout() {
-      console.log("logout() called");
       sessionStorage.removeItem('currentUser');
       window.location.href = 'index.html';
     }
