@@ -3,50 +3,42 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>mobanja Dashboard</title>
+  <title>mobanja — Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <style>
-    body { font-family: system-ui, sans-serif; }
-  </style>
+  <style>body { font-family: system-ui, sans-serif; }</style>
 </head>
-<body class="bg-gray-100 min-h-screen p-8">
+<body class="bg-gray-100 min-h-screen p-6">
 
-  <div class="max-w-xl mx-auto bg-white rounded-3xl shadow-xl p-8">
+  <div class="max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl p-8">
     <h1 class="text-4xl font-bold text-blue-600 text-center mb-8">mobanja Dashboard</h1>
 
     <div class="mb-10">
       <h2 class="text-2xl font-bold mb-4">Add New Employee</h2>
-      <div class="space-y-4">
-        <input id="firstName" placeholder="First Name" class="w-full p-4 border rounded-2xl">
-        <input id="lastName" placeholder="Last Name" class="w-full p-4 border rounded-2xl">
-        <input id="password" type="password" placeholder="Password" class="w-full p-4 border rounded-2xl">
-        <input id="netSalary" type="number" placeholder="Net Salary" class="w-full p-4 border rounded-2xl">
-        <select id="role" class="w-full p-4 border rounded-2xl">
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <input id="firstName" placeholder="First Name" class="p-4 border rounded-2xl">
+        <input id="lastName" placeholder="Last Name" class="p-4 border rounded-2xl">
+        <input id="password" type="password" placeholder="Password" class="p-4 border rounded-2xl">
+        <input id="netSalary" type="number" placeholder="Net Salary" class="p-4 border rounded-2xl">
+        <select id="role" class="p-4 border rounded-2xl">
           <option value="employee">Employee</option>
           <option value="hr">HR</option>
         </select>
       </div>
-      <button onclick="addEmployee()" 
-              class="mt-6 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-2xl text-xl">
-        ADD EMPLOYEE
-      </button>
+      <button onclick="addEmployee()" class="mt-6 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-2xl text-xl">ADD EMPLOYEE</button>
     </div>
 
     <div id="message" class="text-center text-lg font-medium min-h-[50px]"></div>
 
     <div class="mt-12">
       <h2 class="text-2xl font-bold mb-4">All Employees</h2>
-      <div id="usersTable" class="bg-gray-50 p-4 rounded-2xl min-h-[100px]"></div>
+      <div id="usersTable" class="bg-gray-50 p-4 rounded-2xl min-h-[120px]"></div>
     </div>
 
-    <button onclick="logout()" class="mt-10 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-2xl">
-      Logout
-    </button>
+    <button onclick="logout()" class="mt-10 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-2xl text-xl">LOGOUT</button>
   </div>
 
   <script>
-    // Single Supabase client - clean
     const supabase = Supabase.createClient(
       'https://plrlufhgzfirdqjeqjhv.supabase.co',
       'sb_publishable_hVxITJF0v6WEyp5A7ZNqTA_E9Zy7l3V'
@@ -56,10 +48,7 @@
 
     window.onload = async () => {
       const userStr = sessionStorage.getItem('currentUser');
-      if (!userStr) {
-        window.location.href = 'index.html';
-        return;
-      }
+      if (!userStr) return window.location.href = 'index.html';
       currentUser = JSON.parse(userStr);
       showMessage(`Welcome, ${currentUser.firstName || ''} ${currentUser.lastName || ''}`, 'green');
       await loadUsersTable();
@@ -73,13 +62,12 @@
       const role = document.getElementById('role').value;
 
       if (!firstName || !lastName || !password) {
-        showMessage('Please fill all fields', 'red');
+        showMessage("Please fill all fields", "red");
         return;
       }
 
-      showMessage('Adding employee...', 'blue');
+      showMessage("Adding employee...", "blue");
 
-      // Simple ID generation
       const nextId = 'mo' + String(Math.floor(100 + Math.random() * 900));
 
       const { error } = await supabase.from('users').insert([{
@@ -92,10 +80,9 @@
       }]);
 
       if (error) {
-        showMessage('Error: ' + error.message, 'red');
-        console.error(error);
+        showMessage("Failed: " + error.message, "red");
       } else {
-        showMessage(`✅ ${nextId} added successfully!`, 'green');
+        showMessage(`✅ ${nextId} added successfully!`, "green");
         document.getElementById('firstName').value = '';
         document.getElementById('lastName').value = '';
         document.getElementById('password').value = '';
@@ -116,12 +103,12 @@
         document.getElementById('usersTable').innerHTML = `<p class="text-red-600">Error: ${error.message}</p>`;
         return;
       }
-      let html = '<table class="w-full"><thead><tr class="bg-gray-100"><th class="p-3">ID</th><th>Name</th><th>Role</th></tr></thead><tbody>';
+      let html = `<table class="w-full"><thead><tr class="bg-gray-100"><th class="p-3">ID</th><th>Name</th><th>Role</th></tr></thead><tbody>`;
       (data || []).forEach(u => {
         html += `<tr><td class="p-3">${u.id}</td><td>${u.firstName || ''} ${u.lastName || ''}</td><td>${u.role}</td></tr>`;
       });
-      html += '</tbody></table>';
-      document.getElementById('usersTable').innerHTML = html;
+      html += `</tbody></table>`;
+      document.getElementById('usersTable').innerHTML = html || '<p>No employees yet.</p>';
     }
 
     function logout() {
