@@ -30,24 +30,18 @@
         </select>
       </div>
       <button onclick="addEmployee()" class="mt-4 bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-2xl font-bold">ADD EMPLOYEE</button>
-      <div id="addMessage" class="mt-3 text-center"></div>
+      <div id="addMessage" class="mt-4 text-center font-medium"></div>
     </div>
 
     <!-- All Employees -->
     <div class="bg-white p-6 rounded-2xl shadow mb-8">
       <h2 class="text-2xl font-bold mb-4">All Employees</h2>
-      <div id="usersTable" class="overflow-x-auto"></div>
+      <div id="usersTable" class="overflow-x-auto min-h-[100px]"></div>
     </div>
 
     <!-- Live Attendance -->
     <div class="bg-white p-6 rounded-2xl shadow">
-      <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-bold">Live Attendance Today</h2>
-        <div class="flex gap-3">
-          <button onclick="downloadExcel()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-medium">📊 Download Excel</button>
-          <button onclick="downloadPDF()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-medium">📄 Download PDF</button>
-        </div>
-      </div>
+      <h2 class="text-2xl font-bold mb-4">Live Attendance Today</h2>
       <div id="attendanceTable" class="overflow-x-auto"></div>
     </div>
   </div>
@@ -60,12 +54,25 @@
 
     let currentUser = {};
 
+    // Debug: Confirm script loaded
+    console.log("Dashboard script loaded successfully");
+
     window.onload = async () => {
+      console.log("window.onload fired");
       const userStr = sessionStorage.getItem('currentUser');
-      if (!userStr) return window.location.href = 'index.html';
+      if (!userStr) {
+        console.log("No currentUser in sessionStorage");
+        window.location.href = 'index.html';
+        return;
+      }
 
       currentUser = JSON.parse(userStr);
-      if (!['admin','hr'].includes(currentUser.role)) return window.location.href = 'index.html';
+      console.log("Current user:", currentUser);
+
+      if (!['admin','hr'].includes(currentUser.role)) {
+        window.location.href = 'index.html';
+        return;
+      }
 
       document.getElementById('welcomeUser').textContent = `Welcome, ${currentUser.firstName} ${currentUser.lastName}`;
 
@@ -75,6 +82,7 @@
     };
 
     async function addEmployee() {
+      console.log("addEmployee() called");
       const first = document.getElementById('firstName').value.trim();
       const last = document.getElementById('lastName').value.trim();
       const pw = document.getElementById('password').value.trim();
@@ -82,15 +90,17 @@
       const role = document.getElementById('role').value;
 
       if (!first || !last || !pw) {
-        showAddMessage('Please fill all fields', 'red');
+        showMessage('Please fill all fields', 'red');
         return;
       }
 
-      // Auto generate next ID
-      const { data: last } = await supabaseClient.from('users').select('id').order('id', { ascending: false }).limit(1).single();
+      showMessage('Adding employee...', 'blue');
+
+      // Auto ID
+      const { data: lastUser } = await supabaseClient.from('users').select('id').order('id', { ascending: false }).limit(1).single();
       let nextId = 'mo002';
-      if (last && last.id) {
-        const num = parseInt(last.id.replace('mo','')) || 1;
+      if (lastUser && lastUser.id) {
+        const num = parseInt(lastUser.id.replace('mo', '')) || 1;
         nextId = `mo${String(num + 1).padStart(3, '0')}`;
       }
 
@@ -104,10 +114,10 @@
       }]);
 
       if (error) {
-        showAddMessage('Error: ' + error.message, 'red');
+        console.error("Insert error:", error);
+        showMessage('Error: ' + error.message, 'red');
       } else {
-        showAddMessage(`Employee ${nextId} added successfully!`, 'green');
-        // Clear form
+        showMessage(`✅ Employee ${nextId} added successfully!`, 'green');
         document.getElementById('firstName').value = '';
         document.getElementById('lastName').value = '';
         document.getElementById('password').value = '';
@@ -116,28 +126,22 @@
       }
     }
 
-    function showAddMessage(text, color) {
+    function showMessage(text, color) {
       const el = document.getElementById('addMessage');
       el.innerHTML = `<span class="text-${color}-600">${text}</span>`;
-      setTimeout(() => el.innerHTML = '', 4000);
+      setTimeout(() => el.innerHTML = '', 5000);
     }
 
     async function loadUsersTable() {
-      const { data: users } = await supabaseClient.from('users').select('*').order('id');
-      let html = `<table class="w-full border-collapse"><thead><tr class="bg-gray-100"><th class="p-3 text-left">ID</th><th>Name</th><th>Role</th><th>Salary</th><th>Action</th></tr></thead><tbody>`;
-      users.forEach(u => {
-        const btn = (u.role === 'employee' && currentUser.role === 'admin') 
-          ? `<button onclick="promoteToHR('${u.id}')" class="bg-yellow-500 text-white px-3 py-1 rounded text-xs">Make HR</button>` : '';
-        html += `<tr class="border-t"><td class="p-3">${u.id}</td><td>${u.firstName} ${u.lastName}</td><td>${u.role}</td><td>${u.netSalary}</td><td>${btn}</td></tr>`;
+      const { data: users, error } = await supabaseClient.from('users').select('*').order('id');
+      if (error) console.error(error);
+
+      let html = `<table class="w-full border-collapse text-sm"><thead><tr class="bg-gray-100"><th class="p-3 text-left">ID</th><th>Name</th><th>Role</th><th>Salary</th></tr></thead><tbody>`;
+      (users || []).forEach(u => {
+        html += `<tr class="border-t"><td class="p-3">${u.id}</td><td>${u.firstName} ${u.lastName}</td><td>${u.role}</td><td>${u.netSalary}</td></tr>`;
       });
       html += `</tbody></table>`;
       document.getElementById('usersTable').innerHTML = html;
-    }
-
-    async function promoteToHR(id) {
-      if (currentUser.role !== 'admin') return alert('Only Admin can promote');
-      await supabaseClient.from('users').update({ role: 'hr' }).eq('id', id);
-      loadUsersTable();
     }
 
     async function loadAttendanceTable() {
@@ -145,10 +149,10 @@
       const { data: records } = await supabaseClient.from('attendance').select('*').eq('date', today);
       const { data: users } = await supabaseClient.from('users').select('id, firstName, lastName');
 
-      let html = `<table class="w-full border-collapse"><thead><tr class="bg-gray-100"><th class="p-3">ID</th><th>Name</th><th>Sign In</th><th>Sign Out</th><th>Status</th></tr></thead><tbody>`;
-      users.forEach(u => {
-        const inRec = records.find(r => r.employee_id === u.id && r.action === 'Sign In');
-        const outRec = records.find(r => r.employee_id === u.id && r.action === 'Sign Out');
+      let html = `<table class="w-full border-collapse text-sm"><thead><tr class="bg-gray-100"><th class="p-3">ID</th><th>Name</th><th>Sign In</th><th>Sign Out</th><th>Status</th></tr></thead><tbody>`;
+      (users || []).forEach(u => {
+        const inRec = (records || []).find(r => r.employee_id === u.id && r.action === 'Sign In');
+        const outRec = (records || []).find(r => r.employee_id === u.id && r.action === 'Sign Out');
         let status = 'Absent';
         if (inRec && outRec) status = 'Completed';
         else if (inRec) status = 'Present';
@@ -159,12 +163,10 @@
     }
 
     function logout() {
+      console.log("logout() called");
       sessionStorage.removeItem('currentUser');
       window.location.href = 'index.html';
     }
-
-    async function downloadExcel() { alert("Excel download coming in next increment"); }
-    function downloadPDF() { window.print(); }
   </script>
 </body>
 </html>
